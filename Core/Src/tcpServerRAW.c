@@ -18,6 +18,10 @@
 
 #define TCP_SERVER_PORT 5000
 
+static char __attribute__((aligned(4))) input[1024];
+
+static char __attribute__((aligned(4))) response[1024];
+
 /* Forward declarations */
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err);
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
@@ -43,25 +47,25 @@ void tcp_server_init(void)
 
     pcb = tcp_new();
     if (pcb == NULL) {
-        printf("tcp_server_init: tcp_new failed\n");
+        //printf("tcp_server_init: tcp_new failed\n");
         return;
     }
 
     ret = tcp_bind(pcb, IP_ADDR_ANY, TCP_SERVER_PORT);
     if (ret != ERR_OK) {
-        printf("tcp_server_init: tcp_bind failed: %d\n", ret);
+        //printf("tcp_server_init: tcp_bind failed: %d\n", ret);
         tcp_close(pcb);
         return;
     }
 
     pcb = tcp_listen(pcb);
     if (pcb == NULL) {
-        printf("tcp_server_init: tcp_listen failed\n");
+        //printf("tcp_server_init: tcp_listen failed\n");
         return;
     }
 
     tcp_accept(pcb, tcp_server_accept);
-    printf("TCP server listening on port %d\n", TCP_SERVER_PORT);
+    //printf("TCP server listening on port %d\n", TCP_SERVER_PORT);
 }
 
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
@@ -74,7 +78,7 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
     tcp_err(newpcb, tcp_server_err);
     tcp_sent(newpcb, tcp_server_sent);
 
-    printf("New client connected\n");
+    //printf("New client connected\n");
     return ERR_OK;
 }
 
@@ -96,7 +100,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     if (err != ERR_OK || p == NULL) {
         if (p != NULL) pbuf_free(p);
         if (err == ERR_OK && p == NULL) {
-            printf("Client closed connection\n");
+            //printf("Client closed connection\n");
             tcp_server_close_conn(tpcb, arg);
         }
         return ERR_OK;
@@ -106,15 +110,13 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     tcp_recved(tpcb, p->tot_len);
 
     /* Copy data into a local buffer */
-    static char input[256];
     size_t len = (p->tot_len < sizeof(input) - 1) ? p->tot_len : sizeof(input) - 1;
     pbuf_copy_partial(p, input, len, 0);
     input[len] = '\0';
 
-    printf("Received: %s\n", input);
+    //printf("Received: %s\n", input);
 
     /* Process data */
-    static char response[256];
 
     uint32_t num = DAP_ProcessCommand(input + 8, response + 8);
     uint32_t writeLen = (num & 0xFFFF) + 8;
@@ -127,15 +129,21 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
 
 	memcpy(response, &hdr, sizeof(hdr));
 
-    printf("Responding: %s\n", response);
+    //printf("Responding: %s\n", response);
 
     /* Send response */
     //HAL_Delay(10);
+    static int tryCnt = 0;
+    if(response[8] == 0 && tryCnt > 20)
+    {
+    	//while(1);
+    }
+    tryCnt++;
     err_t werr = tcp_write(tpcb, response, writeLen, TCP_WRITE_FLAG_COPY);
     if (werr == ERR_OK) {
         tcp_output(tpcb);
     } else {
-        printf("tcp_write failed: %d\n", werr);
+        //printf("tcp_write failed: %d\n", werr);
     }
 
     pbuf_free(p);
@@ -153,7 +161,7 @@ static err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len)
 static void tcp_server_err(void *arg, err_t err)
 {
     LWIP_UNUSED_ARG(err);
-    printf("Connection aborted or reset\n");
+    //printf("Connection aborted or reset\n");
 }
 
 static void tcp_server_close_conn(struct tcp_pcb *tpcb, void *conn)

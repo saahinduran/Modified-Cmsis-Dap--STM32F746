@@ -40,7 +40,7 @@ extern uint8_t TDO_PROCESSED_SEQ_ARR[];
 
 
 /* This function executes the jtag transfer that is stated by TDI and TMS sequences */
-static inline void apply_jtag_xfer(const uint8_t *tdi, const uint8_t *tms, uint8_t *tdo, uint32_t cnt)
+static inline void apply_jtag_xfer(const uint8_t *tdi_tms, uint8_t *tdo, uint32_t cnt)
 {
 	uint8_t xFerSizes[3];
 	/* divide the transfer into chunks, we don't want the remainder clock cycle to be less
@@ -50,17 +50,18 @@ static inline void apply_jtag_xfer(const uint8_t *tdi, const uint8_t *tms, uint8
 
 	uint32_t currentBit = 0;
 
-	uint8_t *tms_seq_arr = tms;
 
-	uint8_t *tdi_seq_arr = tdi;
+	uint8_t *tms_seq_arr = tdi_tms ;
+
+	uint8_t *tdi_seq_arr = tdi_tms + cnt / 8 + ( (cnt % 8) ? 1 : 0);
 
 	uint8_t *tdo_seq_arr = tdo;
 
 
 	while(xFerSizes[IDX_8_BIT])
 	{
-		uint8_t tms_val = *tms;
-		uint8_t tdi_val = *tdi;
+		uint8_t tms_val = *tms_seq_arr;
+		uint8_t tdi_val = *tdi_seq_arr;
 		uint64_t tdo_val;
 
 
@@ -69,8 +70,8 @@ static inline void apply_jtag_xfer(const uint8_t *tdi, const uint8_t *tms, uint8
 
 		*tdo = (uint8_t)tdo_val;
 
-		tms++;
-		tdi++;
+		tdi_seq_arr++;
+		tms_seq_arr++;
 		tdo++;
 
 		xFerSizes[IDX_8_BIT]--;
@@ -81,8 +82,8 @@ static inline void apply_jtag_xfer(const uint8_t *tdi, const uint8_t *tms, uint8
 	while(xFerSizes[IDX_RM1_BIT])
 	{
 
-		uint16_t tms_val = extract_nbits_lsb(tms_seq_arr, currentBit, xFerSizes[IDX_RM1_BIT]);
-		uint16_t tdi_val = extract_nbits_lsb(tdi_seq_arr, currentBit, xFerSizes[IDX_RM1_BIT]);;
+		uint16_t tms_val = extract_nbits_lsb(tdi_tms, currentBit, xFerSizes[IDX_RM1_BIT]);
+		uint16_t tdi_val = extract_nbits_lsb(tdi_tms + cnt / 8 + ( (cnt % 8) ? 1 : 0), currentBit, xFerSizes[IDX_RM1_BIT]);;
 		uint64_t tdo_val;
 
 		SPI_TMS_Transfer(tms_val, xFerSizes[IDX_RM1_BIT]);
@@ -99,8 +100,8 @@ static inline void apply_jtag_xfer(const uint8_t *tdi, const uint8_t *tms, uint8
 	while(xFerSizes[IDX_RM2_BIT])
 	{
 
-		uint16_t tms_val = extract_nbits_lsb(tms_seq_arr, currentBit, xFerSizes[IDX_RM2_BIT]);
-		uint16_t tdi_val = extract_nbits_lsb(tdi_seq_arr, currentBit, xFerSizes[IDX_RM2_BIT]);;
+		uint16_t tms_val = extract_nbits_lsb(tdi_tms, currentBit, xFerSizes[IDX_RM2_BIT]);
+		uint16_t tdi_val = extract_nbits_lsb(tdi_tms + cnt / 8 + ( (cnt % 8) ? 1 : 0), currentBit, xFerSizes[IDX_RM2_BIT]);;
 		uint64_t tdo_val;
 
 		SPI_TMS_Transfer(tms_val, xFerSizes[IDX_RM2_BIT]);
@@ -125,91 +126,19 @@ static inline uint32_t round_up_to_8(uint32_t bits)          { return (bits + 7u
 
 uint32_t JTAG_Sequence (uint32_t count, const uint8_t *request, uint8_t *response)
 {
-  const uint8_t *req = request;
 
-  uint32_t total_write_bits = 0;
-  uint32_t total_read_bits  = 0;
-  uint32_t tdi_tms_bits     = 0;   // total bits we’ll need for TDI/TMS buffers
-  uint32_t tdo_bits_rounded = 0;   // rounded-up total bits we’ll need for TDO buffer
+	uint32_t wr_bit_cursor = 0;
+	uint16_t xfer_len = *(uint16_t *)(request -1);
 
-  // ---------- Pass 1: size calculation (no heavy work) ----------
-  for (uint32_t i = 0; i < count; i++) {
-    uint32_t n = req[0] & JTAG_SEQUENCE_TCK;
-    if (n == 0u) n = 64u;
+	// ---------- Transfer ----------
 
-    tdi_tms_bits += n;
+	apply_jtag_xfer(request +1, response +2, xfer_len);
 
-    if (req[0] & JTAG_SEQUENCE_TDO) {
-      total_read_bits += n;
-      tdo_bits_rounded = round_up_to_8(total_read_bits);
-    }
+	response[0] = 0;
+	response[1] = 0;
 
-    // advance: header + payload bytes
-    req += 1 + ((n + 7u) >> 3);
-  }
+	return xfer_len /8 + 2 + ( (xfer_len % 8) ? 1 : 0) ;
 
-  // Buffers are globals; clear only what we’ll write.
-  memset(TMS_SEQ_ARR, 0x00, round_up_bits_to_bytes(tdi_tms_bits));
-  memset(TDI_SEQ_ARR, 0x00, round_up_bits_to_bytes(tdi_tms_bits));
-  memset(TDO_SEQ_ARR, 0x00, round_up_bits_to_bytes(tdo_bits_rounded));
-
-  // ---------- Pass 2: build TMS/TDI bitstreams ----------
-  req = request;
-  uint32_t wr_bit_cursor = 0;
-
-  for (uint32_t i = 0; i < count; i++) {
-    const uint8_t hdr      = req[0];
-    uint32_t       n       = hdr & JTAG_SEQUENCE_TCK;
-    if (n == 0u) n = 64u;
-
-    const uint32_t byte_len = (n + 7u) >> 3;
-    const uint8_t  tms_bit  = (uint8_t)((hdr & JTAG_SEQUENCE_TMS) >> 6);
-
-    if (tms_bit) {
-      // Fill 'n' ones at the proper places for TMS (your helper already handles packing)
-      fill_tms_buffer(wr_bit_cursor, n, 1);
-    }
-
-    // Quick “all-zero” check on payload to skip fill_tdi_buffer when possible
-    uint32_t or_acc = 0;
-    const uint8_t *payload = req + 1;
-    for (uint32_t k = 0; k < byte_len; k++) {
-      or_acc |= payload[k];
-    }
-    if (or_acc) {
-      // Only write when there is at least one '1' in payload
-      fill_tdi_buffer(wr_bit_cursor, n, payload);
-    }
-
-    wr_bit_cursor += n;
-    req += 1 + byte_len;
-  }
-
-  // ---------- Transfer ----------
-  apply_jtag_xfer(TDI_SEQ_ARR, TMS_SEQ_ARR, TDO_SEQ_ARR, wr_bit_cursor);
-
-  // ---------- Pass 3: extract TDO back to response ----------
-  const uint8_t * __restrict req2 = request;
-  uint32_t rd_bit_cursor = 0;     // where we write into 'response' (bit index)
-  uint32_t scan_bit_off  = 0;     // where we read from TDO_SEQ_ARR   (bit index), follows write order
-
-  for (uint32_t i = 0; i < count; i++) {
-    uint32_t n = req2[0] & JTAG_SEQUENCE_TCK;
-    if (n == 0u) n = 64u;
-
-    const uint32_t byte_len = (n + 7u) >> 3;
-
-    if (req2[0] & JTAG_SEQUENCE_TDO) {
-      // copy the n bits starting at scan_bit_off into 'response' at rd_bit_cursor
-      copy_bits_lsb(TDO_SEQ_ARR, scan_bit_off, n, response, rd_bit_cursor);
-      rd_bit_cursor = round_up_to_8(rd_bit_cursor + n);  // maintain byte alignment between segments
-    }
-
-    scan_bit_off += n;
-    req2 += 1 + byte_len;
-  }
-
-  return rd_bit_cursor >> 3; // bytes produced
 }
 
 
@@ -241,7 +170,7 @@ uint32_t JTAG_ReadIDCode (void)
 
 	total_bit_cnt += n;
 
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 	/* We are ready to shift IDCODE in */
 	total_bit_cnt = 32;
@@ -251,7 +180,7 @@ uint32_t JTAG_ReadIDCode (void)
 	write_nbits_lsb(tms_buff, total_bit_cnt -1, 8, 0x03);
 	total_bit_cnt += 8;
 
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 	return (uint32_t )(tdo_buff[3] << 24) | (tdo_buff[2] << 16) | (tdo_buff[1] << 8) | (tdo_buff[0]) ;
 }
@@ -282,7 +211,7 @@ void JTAG_WriteAbort (uint32_t data)
 
 	/* APPLY JTAG TRANSFER */
 	total_bit_cnt += 3;
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 
 	/* Write Transfer */
@@ -307,7 +236,7 @@ void JTAG_WriteAbort (uint32_t data)
 	n = DAP_Data.transfer.idle_cycles;
 	total_bit_cnt += n;
 
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 }
 
@@ -392,7 +321,7 @@ void JTAG_IR (uint32_t ir)
 	write_nbits_lsb(tms_buff, total_bit_cnt-1, 4, 0x3);
 	total_bit_cnt += 4;
 
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 
 }
@@ -435,7 +364,7 @@ uint8_t  JTAG_Transfer(uint32_t request, uint32_t *data)
 
 	/* APPLY JTAG TRANSFER */
 	total_bit_cnt += 3;
-	apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+	//apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 
 	copy_bits_lsb(tdo_buff, total_bit_cnt -3,
@@ -448,7 +377,7 @@ uint8_t  JTAG_Transfer(uint32_t request, uint32_t *data)
 		  /* Exit on error */
 		  total_bit_cnt = 8;
 		  write_nbits_lsb(tms_buff, total_bit_cnt, 0x8, 0x3);
-		  apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+		  //apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 	  }
 	  else if (ack == 0x2 && (request & DAP_TRANSFER_RnW) )
 	  {
@@ -468,7 +397,7 @@ uint8_t  JTAG_Transfer(uint32_t request, uint32_t *data)
 		  n = DAP_Data.transfer.idle_cycles;
 		  total_bit_cnt += n;
 
-		  apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+		  //apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 		  *data = 0;
 		  *data |= (tdo_buff[3] << 24) | (tdo_buff[2] << 16) | (tdo_buff[1] << 8) | (tdo_buff[0]) ;
@@ -501,7 +430,7 @@ uint8_t  JTAG_Transfer(uint32_t request, uint32_t *data)
 		  total_bit_cnt += n;
 
 
-		  apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
+		  //apply_jtag_xfer(tdi_buff, tms_buff, tdo_buff, total_bit_cnt);
 
 	  }
 
