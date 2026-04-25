@@ -42,7 +42,7 @@ extern uint8_t TDO_PROCESSED_SEQ_ARR[];
 /* This function executes the jtag transfer that is stated by TDI and TMS sequences */
 static inline void apply_jtag_xfer(const uint8_t *tdi_tms, uint8_t *tdo, uint32_t cnt)
 {
-	uint8_t xFerSizes[3];
+	uint16_t xFerSizes[3];
 	/* divide the transfer into chunks, we don't want the remainder clock cycle to be less
 	 * than 4 since SPI peripheral does not support less than 4 clock cycle transfer.
 	 */

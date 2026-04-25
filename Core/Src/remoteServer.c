@@ -30,10 +30,10 @@
 #endif
 
 #ifndef DAP_PACKET_SIZE
-#define DAP_PACKET_SIZE 512U
+#define DAP_PACKET_SIZE 4096U
 #endif
 
-#define DAP_PKT_SIZE            DAP_PACKET_SIZE
+#define DAP_PKT_SIZE            4096
 #define DAP_PKT_HDR_SIGNATURE   0x00504144UL
 #define DAP_PKT_TYPE_REQUEST    0x01U
 #define DAP_PKT_TYPE_RESPONSE   0x02U

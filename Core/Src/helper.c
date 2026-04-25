@@ -145,7 +145,7 @@ void fill_tdi_buffer(uint32_t bitOffset,
     }
 }
 
-inline void inline calculate_xfer_sizes(uint16_t input_len, uint8_t *buff)
+inline void inline calculate_xfer_sizes(uint16_t input_len, uint16_t *buff)
 {
 	/* divide the transfer into chunks, we don't want the remainder clock cycle to be less
 	 * than 4 since SPI peripheral does not support less than 4 clock cycle transfer.

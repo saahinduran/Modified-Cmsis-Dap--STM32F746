@@ -33,11 +33,9 @@ void fill_tdi_buffer(uint32_t bitOffset,
 
 void fill_tms_buffer(uint32_t total_write_bit_cnt, uint32_t n, uint8_t tms_val);
 
-void calculate_xfer_sizes(uint16_t input_len, uint8_t *buff);
 
 
-
-void calculate_xfer_sizes(uint16_t input_len, uint8_t *buff);
+void calculate_xfer_sizes(uint16_t input_len, uint16_t *buff);
 
 
 uint8_t check_even_parity(uint32_t data, uint8_t parity);

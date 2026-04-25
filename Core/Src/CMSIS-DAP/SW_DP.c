@@ -42,7 +42,7 @@ uint32_t success_ctr = 0;
 #if ((DAP_SWD != 0) || (DAP_JTAG != 0))
 void SWJ_Sequence (uint32_t count, const uint8_t *data) {
 
-  uint8_t xFerSizes[3];
+  uint16_t xFerSizes[3];
 
   	SPI_SwitchPhaseToWrite();
   	calculate_xfer_sizes(count, xFerSizes);
