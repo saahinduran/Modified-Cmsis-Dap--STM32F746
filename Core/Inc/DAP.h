@@ -275,7 +275,7 @@ extern "C"
 // Functions
 extern void     SWJ_Sequence    (uint32_t count, const uint8_t *data);
 extern void     SWD_Sequence    (uint32_t info,  const uint8_t *swdo, uint8_t *swdi);
-extern uint32_t     JTAG_Sequence   (uint32_t info,  const uint8_t *tdi,  uint8_t *tdo);
+extern void     JTAG_Sequence   (uint32_t info,  const uint8_t *tdi,  uint8_t *tdo);
 extern void     JTAG_IR         (uint32_t ir);
 extern uint32_t JTAG_ReadIDCode (void);
 extern void     JTAG_WriteAbort (uint32_t data);
@@ -328,11 +328,12 @@ extern void     DAP_Setup (void);
 #endif
 #if defined(__CC_ARM)
 __STATIC_FORCEINLINE void PIN_DELAY_SLOW (uint32_t delay) {
-  uint32_t count = delay;
+  volatile uint32_t count = delay;
   while (--count);
 }
 #else
 __STATIC_FORCEINLINE void PIN_DELAY_SLOW (uint32_t delay) {
+	delay++;
   __ASM volatile (
   ".syntax unified\n"
   "0:\n\t"

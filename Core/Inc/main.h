@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define CMSIS_TMS_Pin GPIO_PIN_5
+#define CMSIS_TMS_GPIO_Port GPIOE
 #define USER_Btn_Pin GPIO_PIN_13
 #define USER_Btn_GPIO_Port GPIOC
 #define MCO_Pin GPIO_PIN_0
@@ -87,6 +89,8 @@ void Error_Handler(void);
 #define USB_PowerSwitchOn_GPIO_Port GPIOG
 #define USB_OverCurrent_Pin GPIO_PIN_7
 #define USB_OverCurrent_GPIO_Port GPIOG
+#define CMSIS_TRSTn_Pin GPIO_PIN_8
+#define CMSIS_TRSTn_GPIO_Port GPIOC
 #define USB_SOF_Pin GPIO_PIN_8
 #define USB_SOF_GPIO_Port GPIOA
 #define USB_VBUS_Pin GPIO_PIN_9
@@ -101,6 +105,14 @@ void Error_Handler(void);
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
+#define CMSIS_TCK_Pin GPIO_PIN_10
+#define CMSIS_TCK_GPIO_Port GPIOC
+#define CMSIS_TDO_Pin GPIO_PIN_11
+#define CMSIS_TDO_GPIO_Port GPIOC
+#define CMSIS_TDI_Pin GPIO_PIN_12
+#define CMSIS_TDI_GPIO_Port GPIOC
+#define CMSIS_SRSTn_Pin GPIO_PIN_2
+#define CMSIS_SRSTn_GPIO_Port GPIOD
 #define RMII_TX_EN_Pin GPIO_PIN_11
 #define RMII_TX_EN_GPIO_Port GPIOG
 #define RMII_TXD0_Pin GPIO_PIN_13

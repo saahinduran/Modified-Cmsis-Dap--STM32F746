@@ -28,9 +28,6 @@
 #include <string.h>
 #include "DAP_config.h"
 #include "DAP.h"
-#include <math.h>
-#include "helper.h"
-#include "port.h"
 
 
 #if (DAP_PACKET_SIZE < 64U)
@@ -244,12 +241,6 @@ static uint32_t DAP_HostStatus(const uint8_t *request, uint8_t *response) {
 static uint32_t DAP_Connect(const uint8_t *request, uint8_t *response) {
   uint32_t port;
 
-  //JTAG_Reset();
-
-  //HardResetSPI();
-
-  //Switch_SPI();
-
   if (*request == DAP_PORT_AUTODETECT) {
     port = DAP_DEFAULT_PORT;
   } else {
@@ -261,7 +252,6 @@ static uint32_t DAP_Connect(const uint8_t *request, uint8_t *response) {
     case DAP_PORT_SWD:
       DAP_Data.debug_port = DAP_PORT_SWD;
       PORT_SWD_SETUP();
-
       break;
 #endif
 #if (DAP_JTAG != 0)
@@ -277,7 +267,6 @@ static uint32_t DAP_Connect(const uint8_t *request, uint8_t *response) {
 
   *response = (uint8_t)port;
   return ((1U << 16) | 1U);
-
 }
 
 
@@ -416,7 +405,6 @@ static uint32_t DAP_SWJ_Pins(const uint8_t *request, uint8_t *response) {
 static uint32_t DAP_SWJ_Clock(const uint8_t *request, uint8_t *response) {
 #if ((DAP_SWD != 0) || (DAP_JTAG != 0))
   uint32_t clock;
-  uint32_t delay;
 
   clock = (uint32_t)(*(request+0) <<  0) |
           (uint32_t)(*(request+1) <<  8) |
@@ -430,23 +418,7 @@ static uint32_t DAP_SWJ_Clock(const uint8_t *request, uint8_t *response) {
 
   Set_Clock_Delay(clock);
 
-  for(int i = 1; i <= 8; i++)
-  {
-	  float possible_clock = MAX_SPI_PERIPHERAL_CLOCK / pow(2,i);
-	  float percent_error = fabs (possible_clock - clock) / (float)clock * 100;
-	  if(percent_error < 10)
-	  {
-		  *response = DAP_OK;
-		  TDISPI->CR1 &= ~0x38;
-		  TDISPI->CR1 |= (i -1 << 3);
-		  break;
-	  }
-	  else
-	  {
-		  *response = DAP_ERROR;
-	  }
-  }
-
+  *response = DAP_OK;
 #else
   *response = DAP_ERROR;
 #endif
@@ -579,11 +551,27 @@ static uint32_t DAP_JTAG_Sequence(const uint8_t *request, uint8_t *response) {
   response_count = 1U;
 
   sequence_count = *request++;
+  while (sequence_count--) {
+    sequence_info = *request++;
+    count = sequence_info & JTAG_SEQUENCE_TCK;
+    if (count == 0U) {
+      count = 64U;
+    }
+    count = (count + 7U) / 8U;
+#if (DAP_JTAG != 0)
+    JTAG_Sequence(sequence_info, request, response);
+#endif
+    request += count;
+    request_count += count + 1U;
+#if (DAP_JTAG != 0)
+    if ((sequence_info & JTAG_SEQUENCE_TDO) != 0U) {
+      response += count;
+      response_count += count;
+    }
+#endif
+  }
 
-  response_count = JTAG_Sequence(sequence_count, request, response);
-
-
-  return ((request_count << 16) | response_count) +1;
+  return ((request_count << 16) | response_count);
 }
 
 

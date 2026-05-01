@@ -7,7 +7,7 @@
 #include <string.h>
 #include "DAP.h"
 
-#define TCP_SERVER_PORT 5000
+#define TCP_SERVER_PORT 4441
 
 #ifndef ENABLE_REMOTE_DAP_CLIENT
 #define ENABLE_REMOTE_DAP_CLIENT 1
@@ -408,7 +408,7 @@ static void tcp_remote_try_connect(void)
     err_t ret;
 
     if ((s_remote_connected != 0U) || (s_remote_ctx.pcb != NULL)) {
-        return;
+        //return;
     }
 
     if (!ipaddr_aton(REMOTE_SERVER_IP, &remote_ip)) {

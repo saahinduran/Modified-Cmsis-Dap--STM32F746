@@ -338,21 +338,21 @@ __STATIC_INLINE void PORT_OFF (void) {
 \return Current status of the SWCLK/TCK DAP hardware I/O pin.
 */
 static uint32_t PIN_SWCLK_TCK_IN  (void) {
-  return (0U);
+  return HAL_GPIO_ReadPin(GPIOC, CMSIS_TCK_Pin);
 }
 
 /** SWCLK/TCK I/O pin: Set Output to High.
 Set the SWCLK/TCK DAP hardware I/O pin to high level.
 */
 static void     PIN_SWCLK_TCK_SET (void) {
-  ;
+	HAL_GPIO_WritePin(GPIOC, CMSIS_TCK_Pin, GPIO_PIN_SET);
 }
 
 /** SWCLK/TCK I/O pin: Set Output to Low.
 Set the SWCLK/TCK DAP hardware I/O pin to low level.
 */
 static void     PIN_SWCLK_TCK_CLR (void) {
-  ;
+	HAL_GPIO_WritePin(GPIOC, CMSIS_TCK_Pin, GPIO_PIN_RESET);
 }
 
 
@@ -362,35 +362,45 @@ static void     PIN_SWCLK_TCK_CLR (void) {
 \return Current status of the SWDIO/TMS DAP hardware I/O pin.
 */
 static uint32_t PIN_SWDIO_TMS_IN  (void) {
-  return (0U);
+	return HAL_GPIO_ReadPin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin);
 }
 
 /** SWDIO/TMS I/O pin: Set Output to High.
 Set the SWDIO/TMS DAP hardware I/O pin to high level.
 */
 static void     PIN_SWDIO_TMS_SET (void) {
-
+	HAL_GPIO_WritePin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin, GPIO_PIN_SET);
 }
 
 /** SWDIO/TMS I/O pin: Set Output to Low.
 Set the SWDIO/TMS DAP hardware I/O pin to low level.
 */
 static void     PIN_SWDIO_TMS_CLR (void) {
-
+	HAL_GPIO_WritePin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin, GPIO_PIN_RESET);
 }
 
 /** SWDIO I/O pin: Get Input (used in SWD mode only).
 \return Current status of the SWDIO DAP hardware I/O pin.
 */
 static uint32_t PIN_SWDIO_IN      (void) {
-  return (0U);
+	return HAL_GPIO_ReadPin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin);
 }
 
 /** SWDIO I/O pin: Set Output (used in SWD mode only).
 \param bit Output value for the SWDIO DAP hardware I/O pin.
 */
 static void     PIN_SWDIO_OUT     (uint32_t bit) {
-  ;
+
+  if(bit)
+  	{
+  		HAL_GPIO_WritePin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin, GPIO_PIN_SET );
+  	}
+
+  	else
+  	{
+  		HAL_GPIO_WritePin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin, GPIO_PIN_RESET);
+  	}
+
 }
 
 /** SWDIO I/O pin: Switch to Output mode (used in SWD mode only).
@@ -398,7 +408,7 @@ Configure the SWDIO DAP hardware I/O pin to output mode. This function is
 called prior \ref PIN_SWDIO_OUT function calls.
 */
 static void     PIN_SWDIO_OUT_ENABLE  (void) {
-  ;
+	HAL_GPIO_WritePin(CMSIS_TMS_GPIO_Port, CMSIS_TMS_Pin, GPIO_PIN_RESET);
 }
 
 /** SWDIO I/O pin: Switch to Input mode (used in SWD mode only).
@@ -416,14 +426,22 @@ static void     PIN_SWDIO_OUT_DISABLE (void) {
 \return Current status of the TDI DAP hardware I/O pin.
 */
 static uint32_t PIN_TDI_IN  (void) {
-  return (0U);
+	return HAL_GPIO_ReadPin(GPIOC, CMSIS_TDI_Pin);
 }
 
 /** TDI I/O pin: Set Output.
 \param bit Output value for the TDI DAP hardware I/O pin.
 */
 static void     PIN_TDI_OUT (uint32_t bit) {
-  ;
+	if(bit & 0x1)
+	{
+		HAL_GPIO_WritePin(GPIOC, CMSIS_TDI_Pin, GPIO_PIN_SET);
+	}
+	else
+	{
+		HAL_GPIO_WritePin(GPIOC, CMSIS_TDI_Pin, GPIO_PIN_RESET);
+	}
+
 }
 
 
@@ -433,7 +451,7 @@ static void     PIN_TDI_OUT (uint32_t bit) {
 \return Current status of the TDO DAP hardware I/O pin.
 */
 static uint32_t PIN_TDO_IN  (void) {
-  return (0U);
+	return HAL_GPIO_ReadPin(GPIOC, CMSIS_TDO_Pin);
 }
 
 
@@ -443,7 +461,7 @@ static uint32_t PIN_TDO_IN  (void) {
 \return Current status of the nTRST DAP hardware I/O pin.
 */
 static uint32_t PIN_nTRST_IN   (void) {
-  return (0U);
+	return HAL_GPIO_ReadPin(GPIOC, CMSIS_TDO_Pin);
 }
 
 /** nTRST I/O pin: Set Output.
