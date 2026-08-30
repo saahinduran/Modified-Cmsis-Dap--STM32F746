@@ -77,6 +77,20 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
   return len;
 }
 
+#ifdef __GNUC__
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#else
+#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#endif
+
+extern UART_HandleTypeDef huart3;
+PUTCHAR_PROTOTYPE
+{
+  // Replace 'huart2' with your actual UART handle (e.g., &huart1)
+  HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+  return ch;
+}
+
 __attribute__((weak)) int _write(int file, char *ptr, int len)
 {
   (void)file;

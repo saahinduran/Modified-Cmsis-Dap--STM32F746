@@ -1,4 +1,5 @@
-#if 1
+#include "dap_server_config.h"
+#if (DAP_SERVER_MODE == DAP_SERVER_MODE_LAN)
 /*
  * stm32_lwip_tcp_server.c
  *
@@ -17,7 +18,12 @@
 #include <stdlib.h>
 #include "DAP.h"
 
-#define TCP_SERVER_PORT 5000
+// Returns current cycle count
+uint32_t Get_CPU_Cycles(void) {
+    return DWT->CYCCNT;
+}
+
+#define TCP_SERVER_PORT DAP_TCP_SERVER_PORT
 
 static char __attribute__((aligned(4))) input[4096];
 
@@ -80,25 +86,25 @@ void tcp_server_init(void)
 
     pcb = tcp_new();
     if (pcb == NULL) {
-        //printf("tcp_server_init: tcp_new failed\n");
+        printf("tcp_server_init: tcp_new failed\n");
         return;
     }
 
     ret = tcp_bind(pcb, IP_ADDR_ANY, TCP_SERVER_PORT);
     if (ret != ERR_OK) {
-        //printf("tcp_server_init: tcp_bind failed: %d\n", ret);
+        printf("tcp_server_init: tcp_bind failed: %d\n", ret);
         tcp_close(pcb);
         return;
     }
 
     pcb = tcp_listen(pcb);
     if (pcb == NULL) {
-        //printf("tcp_server_init: tcp_listen failed\n");
+        printf("tcp_server_init: tcp_listen failed\n");
         return;
     }
 
     tcp_accept(pcb, tcp_server_accept);
-    //printf("TCP server listening on port %d\n", TCP_SERVER_PORT);
+    printf("TCP server listening on port %d\n", TCP_SERVER_PORT);
 }
 
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
@@ -117,7 +123,7 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
     tcp_err(newpcb, tcp_server_err);
     tcp_sent(newpcb, tcp_server_sent);
 
-    //printf("New client connected\n");
+    printf("New client connected\n");
     return ERR_OK;
 }
 
@@ -129,7 +135,7 @@ struct cmsis_dap_tcp_packet_hdr {
 }cmsis_dap_tcp_pck __attribute__((__packed__));
 
 // DAP_PKT_SIZE must be >= to what is used by the client (OpenOCD).
-#define DAP_PKT_SIZE            CONFIG_ESP_DAP_TCP_MAX_PKT_SIZE
+#define DAP_PKT_SIZE            DAP_TCP_PKT_SIZE
 #define DAP_PKT_HDR_SIGNATURE   0x00504144   // "DAP\0" in LE
 #define DAP_PKT_TYPE_REQUEST    0x01
 #define DAP_PKT_TYPE_RESPONSE   0x02
@@ -141,7 +147,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     if (err != ERR_OK || p == NULL) {
         if (p != NULL) pbuf_free(p);
         if (err == ERR_OK && p == NULL) {
-            //printf("Client closed connection\n");
+            printf("Client closed connection\n");
             tcp_server_close_conn(tpcb, state);
         }
         return ERR_OK;
@@ -173,7 +179,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         
         /* Check if this is a valid DAP packet */
         if (hdr->signature != DAP_PKT_HDR_SIGNATURE) {
-            //printf("Invalid signature, discarding buffer\n");
+            printf("Invalid signature, discarding buffer\n");
             state->recv_buffer_len = 0;
             break;
         }
@@ -183,7 +189,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
 
         /* Safeguard against invalid length values */
         if (total_msg_len > state->recv_buffer_size) {
-            //printf("Message too large, discarding\n");
+            printf("Message too large, discarding\n");
             state->recv_buffer_len = 0;
             break;
         }
@@ -194,9 +200,13 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
             break;
         }
 
+        uint32_t firstTime = Get_CPU_Cycles();
         /* We have a complete message - process it */
         uint32_t num = DAP_ProcessCommand((uint8_t *)(state->recv_buffer + offset + 8), (uint8_t *)response + 8);
         uint32_t writeLen = (num & 0xFFFF) + 8;
+
+        uint32_t elapsedTime = Get_CPU_Cycles() - firstTime;
+        //printf("Elapsed time for write len :%d is %d tick\r\n", writeLen, elapsedTime);
 
         struct cmsis_dap_tcp_packet_hdr response_hdr;
         response_hdr.signature = DAP_PKT_HDR_SIGNATURE;
@@ -213,10 +223,29 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         }
         tryCnt++;
         err_t werr = tcp_write(tpcb, response, writeLen, TCP_WRITE_FLAG_COPY);
+
+        // Get available bytes in the send buffer
+        u16_t space_available = tcp_sndbuf(tpcb);
+
+        // Get the current number of enqueued segments
+        u16_t queue_len = tcp_sndqueuelen(tpcb);
+
+        //printf("TCP Debug: [Buffer Space: %u bytes] [Queue Len: %u]\n", space_available, queue_len);
+
+        if (space_available == 0) {
+            printf("Warning: Send buffer is completely full!\n");
+        }
+
+        if (queue_len >= TCP_SND_QUEUELEN) {
+            printf("Warning: Maximum queue length (%d) reached!\n", TCP_SND_QUEUELEN);
+        }
+
+
         if (werr == ERR_OK) {
             tcp_output(tpcb);
-        } else {
-            //printf("tcp_write failed: %d\n", werr);
+        } else
+        {
+            printf("tcp_write failed: %d\n", werr);
         }
 
         offset += total_msg_len;
@@ -246,7 +275,7 @@ static void tcp_server_err(void *arg, err_t err)
     LWIP_UNUSED_ARG(err);
     struct tcp_conn_state *state = (struct tcp_conn_state *)arg;
     tcp_conn_state_free(state);
-    //printf("Connection aborted or reset\n");
+    printf("Connection aborted or reset\n");
 }
 
 static void tcp_server_close_conn(struct tcp_pcb *tpcb, void *conn)

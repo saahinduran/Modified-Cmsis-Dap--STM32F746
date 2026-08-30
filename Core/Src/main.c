@@ -77,6 +77,13 @@ static void MX_SPI4_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void DWT_Init(void) {
+    // Enable DWT_CYCCNT
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0; // Reset counter
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk; // Enable counter
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -125,6 +132,7 @@ int main(void)
   MX_LWIP_Init();
   MX_SPI4_Init();
   /* USER CODE BEGIN 2 */
+  DWT_Init();
   tcp_server_init();
 
   HardResetSPI();
