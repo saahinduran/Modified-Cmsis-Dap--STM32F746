@@ -132,27 +132,10 @@ int main(void)
 
   while (1)
   {
-	  uint32_t num;
-	  MX_LWIP_Process();
-/*
-	  if(msgAvailable)
-	  {
-		  uint32_t readLen, writeLen;
-
-		  num = DAP_ProcessCommand(rdBuff, wrBuff);
-
-		  readLen = (num & 0xFFFF0000) >> 16;
-
-		  writeLen = (num & 0xFFFF);
-
-		  msgAvailable = 0;
-
-	  }
- */
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    MX_LWIP_Process();
   }
   /* USER CODE END 3 */
 }

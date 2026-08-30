@@ -1,35 +1,52 @@
-/*
- * dap_server_config.h
+/**
+ * @file    dap_server_config.h
+ * @brief   CMSIS-DAP TCP Server configuration.
  *
- * Unified configuration for CMSIS-DAP TCP Server / Client.
+ * Change DAP_SERVER_MODE to switch between LAN-only and WAN (remote)
+ * operation.  All network-level tunables live here so that no other
+ * source file needs to be edited when changing the deployment mode.
  */
 
-#ifndef INC_DAP_SERVER_CONFIG_H_
-#define INC_DAP_SERVER_CONFIG_H_
+#ifndef DAP_SERVER_CONFIG_H
+#define DAP_SERVER_CONFIG_H
 
-/* -------------------------------------------------------------------------
- * DAP Server / Client Mode Selection
- * -------------------------------------------------------------------------
- * DAP_SERVER_MODE_LAN : Listens as a TCP server on the local network (port 4441)
- * DAP_SERVER_MODE_WAN : Connects as a TCP client to a remote server (e.g. ngrok / VPS)
- */
-#define DAP_SERVER_MODE_LAN     0
-#define DAP_SERVER_MODE_WAN     1
+/* ---- Mode selectors ---------------------------------------------------- */
+#define DAP_SERVER_MODE_LAN   0   /**< Direct LAN TCP server only.          */
+#define DAP_SERVER_MODE_WAN   1   /**< LAN server + outbound remote client. */
 
-#define DAP_SERVER_MODE         DAP_SERVER_MODE_LAN
+/* ========================================================================
+ *  >>> CHANGE THIS LINE TO SWITCH BETWEEN LAN AND WAN <<<
+ * ======================================================================== */
+#define DAP_SERVER_MODE       DAP_SERVER_MODE_LAN
 
-/* Server listening port (LAN mode) */
-#define DAP_TCP_SERVER_PORT     4441
+/* ---- Common settings --------------------------------------------------- */
+#ifndef DAP_TCP_SERVER_PORT
+#define DAP_TCP_SERVER_PORT   5000
+#endif
 
-/* Remote server configuration (WAN mode) */
-#define DAP_REMOTE_SERVER_IP    "192.168.1.137"
-#define DAP_REMOTE_SERVER_PORT  4441
+#ifndef DAP_TCP_PKT_SIZE
+#define DAP_TCP_PKT_SIZE      4096U
+#endif
 
-/* DAP TCP packet buffer size */
-#define DAP_TCP_PKT_SIZE        4096
+/* ---- WAN-mode settings (ignored in LAN mode) --------------------------- */
+#if (DAP_SERVER_MODE == DAP_SERVER_MODE_WAN)
 
-/* Legacy aliases for backward compatibility */
-#define REMOTE_SERVER_IP        DAP_REMOTE_SERVER_IP
-#define REMOTE_SERVER_PORT      DAP_REMOTE_SERVER_PORT
+#ifndef REMOTE_SERVER_IP
+#define REMOTE_SERVER_IP          "206.81.20.113"
+#endif
 
-#endif /* INC_DAP_SERVER_CONFIG_H_ */
+#ifndef REMOTE_SERVER_PORT
+#define REMOTE_SERVER_PORT        9999
+#endif
+
+#ifndef REMOTE_RECONNECT_MS
+#define REMOTE_RECONNECT_MS       10000U
+#endif
+
+#ifndef REMOTE_TCP_POLL_INTERVAL
+#define REMOTE_TCP_POLL_INTERVAL  4U
+#endif
+
+#endif /* DAP_SERVER_MODE_WAN */
+
+#endif /* DAP_SERVER_CONFIG_H */
