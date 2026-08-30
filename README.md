@@ -1,42 +1,39 @@
 # CMSIS-DAP TCP Server for STM32F7
 
-An Ethernet-based **CMSIS-DAP** debug probe firmware for **STM32F746** (e.g., NUCLEO-F746ZG), providing high-speed SWD and JTAG debugging over TCP/IP using the lwIP raw API.
-
-Compatible with **OpenOCD**, **pyOCD**, **Keil MDK**, and other debuggers supporting CMSIS-DAP over TCP.
+An Ethernet-based **CMSIS-DAP** debug probe firmware for **STM32F746** (e.g., NUCLEO-F746ZG), providing SWD and JTAG debugging over TCP/IP using the lwIP raw API.
 
 ---
 
-## 🌿 Branches
+## 🌿 Branches & Implementation Differences
 
-This repository maintains two specialized branches depending on your hardware signal generation requirements:
+This repository contains two distinct implementations on separate branches:
 
-| Branch | Signal Generation | Key Advantage | Best Use Case |
+| Branch | Signal Generation | Protocol Compatibility | Description & Best Use Case |
 | :--- | :--- | :--- | :--- |
-| **`spi`** | **Hardware SPI Accelerated** | Maximum clock speeds and data throughput | Production debugging, large firmware flashing |
-| **`gpio`** | **GPIO Bit-Banging** | Universal pin compatibility, simple hardware setup | Flexible prototyping, porting to other MCUs |
+| **`gpio`** | **GPIO Bit-Banging** | **Standard CMSIS-DAP** | Standard CMSIS-DAP v1/v2 compatible out-of-the-box with upstream **OpenOCD**, **pyOCD**, and Keil MDK. Universal pin mapping and straightforward setup. |
+| **`spi`** | **Hardware SPI Accelerated** | **Customized Protocol** | Custom high-speed JTAG protocol leveraging STM32 hardware SPI peripherals (SPI3/SPI4 FIFOs) for accelerated clocking and high data throughput. Requires compatible customized client/fork. |
 
 To switch branches:
 ```bash
-git checkout spi   # For SPI accelerated implementation
-git checkout gpio  # For GPIO bit-banging implementation
+git checkout gpio  # For Standard CMSIS-DAP (GPIO bit-banging)
+git checkout spi   # For High-Speed SPI Accelerated version
 ```
 
 ---
 
 ## 🚀 Key Features
 
-- **CMSIS-DAP v1 / v2 Protocol**: Full support for standard JTAG and Serial Wire Debug (SWD) commands.
-- **High-Performance TCP Stack**: Built on lightweight lwIP raw API with zero-copy packet processing and tuned TCP MSS (1024 bytes).
-- **Dual Deployment Modes** (via [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h)):
+- **Networked Debugging**: Direct TCP server implementation using lightweight lwIP raw API with zero-copy packet processing and tuned TCP MSS (1024 bytes).
+- **Dual Deployment Modes** (configured in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h)):
   - **LAN Mode (`DAP_SERVER_MODE_LAN`)**: Listens as a TCP server on the local network.
-  - **WAN Mode (`DAP_SERVER_MODE_WAN`)**: Automatically initiates an outbound connection to a remote relay/VPS server—enabling remote debugging from anywhere through NAT/firewalls.
-- **UART Diagnostics & Profiling**: Real-time connection status, TCP queue diagnostics, and DWT execution cycle profiling output over USART3 (ST-LINK Virtual COM Port at 115200 baud).
+  - **WAN Mode (`DAP_SERVER_MODE_WAN`)**: Automatically initiates an outbound connection to a remote relay/VPS server—enabling remote debugging through NAT and firewalls.
+- **Diagnostics & Profiling**: Real-time connection status, TCP queue diagnostics, and DWT cycle execution profiling output over USART3 (ST-LINK Virtual COM Port at 115200 baud).
 
 ---
 
 ## ⚙️ Configuration
 
-All network and server configurations are centralized in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h).
+All network and server configurations are centralized in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h):
 
 ```c
 /* Mode Selection: DAP_SERVER_MODE_LAN or DAP_SERVER_MODE_WAN */
@@ -56,10 +53,10 @@ All network and server configurations are centralized in [`Core/Inc/dap_server_c
 #endif
 ```
 
-### Static IP / DHCP Settings
+### Static IP / Network Settings
 
-Network IP configuration can be adjusted in the STM32CubeMX `.ioc` file or in `LWIP/App/lwip.c`:
-- **Default IP (LAN)**: `192.168.1.110` (or `192.168.1.114`)
+Network IP configuration is defined in `LWIP/App/lwip.c` (and STM32CubeMX `.ioc`):
+- **Default IP (LAN)**: `192.168.1.114`
 - **Netmask**: `255.255.255.0`
 - **Gateway**: `192.168.1.1`
 
@@ -87,18 +84,18 @@ Network IP configuration can be adjusted in the STM32CubeMX `.ioc` file or in `L
 
 ---
 
-## 🛠️ Usage with OpenOCD
+## 🛠️ Usage with OpenOCD (Standard `gpio` branch)
 
-Create an `openocd_tcp.cfg` file on your host PC:
+Create an `openocd_tcp.cfg` configuration file on your host machine:
 
 ```tcl
 # Interface configuration for CMSIS-DAP over TCP
 adapter driver cmsis-dap
 cmsis-dap backend tcp
-cmsis-dap tcp_server 192.168.1.110
+cmsis-dap tcp_server 192.168.1.114
 cmsis-dap tcp_port 5000
 
-# Select transport (swd or jtag)
+# Select transport protocol (swd or jtag)
 transport select swd
 
 # Target configuration (example for STM32F4)
@@ -127,21 +124,20 @@ arm-none-eabi-gdb your_firmware.elf
    ```bash
    git clone https://github.com/saahinduran/CMSIS-DAP-TCP.git
    cd CMSIS-DAP-TCP
-   git checkout spi   # or: git checkout gpio
+   git checkout gpio  # or: git checkout spi
    ```
 2. **Open in STM32CubeIDE**:
-   - File -> Open Projects from File System... -> Select repository folder.
+   - File -> Open Projects from File System... -> Select repository directory.
 3. **Build**:
-   - Select **Release** or **Debug** configuration (recommended `-O3` optimization for high debug speeds).
+   - Select **Release** or **Debug** configuration (recommended `-O3` optimization level for highest transfer performance).
 4. **Flash**:
-   - Connect your STM32F746 board via onboard ST-LINK USB cable.
-   - Run / Debug the firmware.
-5. **Connect Ethernet**:
-   - Plug the RJ45 cable from the board to your local switch/router.
-   - Monitor the serial console (115200 baud) for IP and connection status messages.
+   - Connect the STM32F746 board via the onboard ST-LINK USB port and flash the target.
+5. **Network Connection**:
+   - Connect an RJ45 Ethernet cable to your local network switch/router.
+   - Monitor the USART3 serial console (115200 baud) for IP status and connection logs.
 
 ---
 
 ## 📄 License
 
-This project is released under the [Apache-2.0 License](LICENSE) (CMSIS-DAP components) and standard BSD / MIT licenses for lwIP and HAL components.
+This project is licensed under the [Apache-2.0 License](LICENSE) with upstream components licensed under standard BSD / MIT licenses (lwIP and STM32 HAL).
