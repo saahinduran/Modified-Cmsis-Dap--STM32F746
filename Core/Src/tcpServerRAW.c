@@ -1,14 +1,13 @@
+/*
+ * tcpServerRAW.c
+ *
+ * CMSIS-DAP TCP Server using lwIP RAW API.
+ * Handles incoming DAP packets over LAN, forwards to DAP_ProcessCommand,
+ * and transmits responses back to client (e.g. OpenOCD / pyOCD).
+ */
+
 #include "dap_server_config.h"
 #if (DAP_SERVER_MODE == DAP_SERVER_MODE_LAN)
-/*
- * stm32_lwip_tcp_server.c
- *
- * TCP server example for STM32 using lwIP raw API.
- * - Listens on port 5000.
- * - Receives data, performs user-defined processing, and sends back response.
- *
- * Author: ChatGPT (modified version)
- */
 
 #include "lwip/tcp.h"
 #include "lwip/err.h"
@@ -19,15 +18,13 @@
 #include "DAP.h"
 
 // Returns current cycle count
-uint32_t Get_CPU_Cycles(void) {
+static inline uint32_t Get_CPU_Cycles(void) {
     return DWT->CYCCNT;
 }
 
 #define TCP_SERVER_PORT DAP_TCP_SERVER_PORT
 
-static char __attribute__((aligned(4))) input[4096];
-
-static char __attribute__((aligned(4))) response[4096];
+static char __attribute__((aligned(4))) response[DAP_TCP_PKT_SIZE];
 
 /* Per-connection state for receiving data */
 struct tcp_conn_state {
@@ -68,16 +65,6 @@ static void  tcp_server_err(void *arg, err_t err);
 static err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len);
 static void  tcp_server_close_conn(struct tcp_pcb *tpcb, void *conn);
 
-/* User-defined function to process received data */
-static void process_data(const char *input, char *output, size_t out_len)
-{
-    /* Example: convert input to uppercase */
-    size_t len = strlen(input);
-    for (size_t i = 0; i < len && i < out_len - 1; i++) {
-        output[i] = (char)toupper((unsigned char)input[i]);
-    }
-    output[len < out_len - 1 ? len : out_len - 1] = '\0';
-}
 
 void tcp_server_init(void)
 {
@@ -217,11 +204,6 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         memcpy(response, &response_hdr, sizeof(response_hdr));
 
         /* Send response */
-        static int tryCnt = 0;
-        if(response[8] == 0 && tryCnt > 20) {
-            //while(1);
-        }
-        tryCnt++;
         err_t werr = tcp_write(tpcb, response, writeLen, TCP_WRITE_FLAG_COPY);
 
         // Get available bytes in the send buffer
