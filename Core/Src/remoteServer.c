@@ -1,4 +1,6 @@
-#if 0
+#include "dap_server_config.h"
+#if (DAP_SERVER_MODE == DAP_SERVER_MODE_WAN)
+
 #include "lwip/tcp.h"
 #include "lwip/err.h"
 #include "lwip/ip_addr.h"
@@ -7,33 +9,9 @@
 #include <string.h>
 #include "DAP.h"
 
-#define TCP_SERVER_PORT 4441
+#define TCP_SERVER_PORT DAP_TCP_SERVER_PORT
 
-#ifndef ENABLE_REMOTE_DAP_CLIENT
-#define ENABLE_REMOTE_DAP_CLIENT 1
-#endif
-
-#ifndef REMOTE_SERVER_IP
-#define REMOTE_SERVER_IP "206.81.20.113"
-#endif
-
-#ifndef REMOTE_SERVER_PORT
-#define REMOTE_SERVER_PORT 9999
-#endif
-
-#ifndef REMOTE_RECONNECT_MS
-#define REMOTE_RECONNECT_MS 10000U
-#endif
-
-#ifndef REMOTE_TCP_POLL_INTERVAL
-#define REMOTE_TCP_POLL_INTERVAL 4U
-#endif
-
-#ifndef DAP_PACKET_SIZE
-#define DAP_PACKET_SIZE 4096U
-#endif
-
-#define DAP_PKT_SIZE            4096
+#define DAP_PKT_SIZE            DAP_TCP_PKT_SIZE
 #define DAP_PKT_HDR_SIGNATURE   0x00504144UL
 #define DAP_PKT_TYPE_REQUEST    0x01U
 #define DAP_PKT_TYPE_RESPONSE   0x02U
@@ -55,7 +33,7 @@ struct msgbuf_t {
 
 enum {
     TCP_CONN_ROLE_SERVER = 0,
-    TCP_CONN_ROLE_REMOTE = 1
+    TCP_CONN_ROLE_REMOTE
 };
 
 struct tcp_conn_ctx {
@@ -67,11 +45,9 @@ struct tcp_conn_ctx {
 };
 
 static struct tcp_conn_ctx s_server_ctx = { .role = TCP_CONN_ROLE_SERVER };
-#if ENABLE_REMOTE_DAP_CLIENT
 static struct tcp_conn_ctx s_remote_ctx = { .role = TCP_CONN_ROLE_REMOTE };
 static uint8_t s_remote_connected = 0;
 static uint8_t s_remote_reconnect_pending = 0;
-#endif
 static struct tcp_pcb *s_active_client = NULL;
 
 /* Forward declarations */
@@ -80,13 +56,11 @@ static err_t tcp_conn_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_
 static void  tcp_conn_err(void *arg, err_t err);
 static err_t tcp_conn_sent(void *arg, struct tcp_pcb *tpcb, u16_t len);
 static void  tcp_conn_close(struct tcp_conn_ctx *ctx, struct tcp_pcb *tpcb, uint8_t close_pcb);
-#if ENABLE_REMOTE_DAP_CLIENT
 static void  tcp_remote_try_connect(void);
 static void  tcp_remote_schedule_reconnect(void);
 static void  tcp_remote_reconnect_timer(void *arg);
 static err_t tcp_remote_connected_cb(void *arg, struct tcp_pcb *tpcb, err_t err);
 static err_t tcp_remote_poll(void *arg, struct tcp_pcb *tpcb);
-#endif
 
 static uint16_t read_le16(const uint8_t *p)
 {
@@ -214,15 +188,11 @@ static void tcp_setup_conn(struct tcp_pcb *pcb, struct tcp_conn_ctx *ctx)
     tcp_recv(pcb, tcp_conn_recv);
     tcp_err(pcb, tcp_conn_err);
     tcp_sent(pcb, tcp_conn_sent);
-#if ENABLE_REMOTE_DAP_CLIENT
     if (ctx->role == TCP_CONN_ROLE_REMOTE) {
         tcp_poll(pcb, tcp_remote_poll, REMOTE_TCP_POLL_INTERVAL);
     } else {
         tcp_poll(pcb, NULL, 0);
     }
-#else
-    tcp_poll(pcb, NULL, 0);
-#endif
 }
 
 void tcp_server_init(void)
@@ -251,9 +221,7 @@ void tcp_server_init(void)
 
     tcp_accept(pcb, tcp_server_accept);
 
-#if ENABLE_REMOTE_DAP_CLIENT
     tcp_remote_try_connect();
-#endif
 }
 
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
@@ -343,12 +311,10 @@ static void tcp_conn_err(void *arg, err_t err)
     if (ctx->role == TCP_CONN_ROLE_SERVER) {
         s_active_client = NULL;
     }
-#if ENABLE_REMOTE_DAP_CLIENT
     if (ctx->role == TCP_CONN_ROLE_REMOTE) {
         s_remote_connected = 0;
         tcp_remote_schedule_reconnect();
     }
-#endif
 }
 
 static void tcp_conn_close(struct tcp_conn_ctx *ctx, struct tcp_pcb *tpcb, uint8_t close_pcb)
@@ -376,16 +342,14 @@ static void tcp_conn_close(struct tcp_conn_ctx *ctx, struct tcp_pcb *tpcb, uint8
             s_active_client = NULL;
         }
 
-#if ENABLE_REMOTE_DAP_CLIENT
         if (ctx->role == TCP_CONN_ROLE_REMOTE) {
             s_remote_connected = 0;
             tcp_remote_schedule_reconnect();
         }
-#endif
     }
 }
 
-#if ENABLE_REMOTE_DAP_CLIENT
+/* ---- Remote (WAN) client functions ------------------------------------ */
 static void tcp_remote_schedule_reconnect(void)
 {
     if (s_remote_reconnect_pending == 0U) {
@@ -408,7 +372,7 @@ static void tcp_remote_try_connect(void)
     err_t ret;
 
     if ((s_remote_connected != 0U) || (s_remote_ctx.pcb != NULL)) {
-        //return;
+        return;
     }
 
     if (!ipaddr_aton(REMOTE_SERVER_IP, &remote_ip)) {
@@ -457,5 +421,5 @@ static err_t tcp_remote_poll(void *arg, struct tcp_pcb *tpcb)
     LWIP_UNUSED_ARG(tpcb);
     return ERR_OK;
 }
-#endif
-#endif
+
+#endif /* DAP_SERVER_MODE == DAP_SERVER_MODE_WAN */
