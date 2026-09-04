@@ -23,6 +23,7 @@
 #define __LWIPOPTS__H__
 
 #include "main.h"
+#include "dap_server_config.h"
 
 /*-----------------------------------------------------------------------------*/
 /* Current version of LwIP supported by CubeMx: 2.1.2 -*/
@@ -53,8 +54,10 @@
 #define SYS_LIGHTWEIGHT_PROT 0
 /*----- Value in opt.h for MEM_ALIGNMENT: 1 -----*/
 #define MEM_ALIGNMENT 4
-/*----- Default Value for F7 devices: 0x20048000 -----*/
-#define LWIP_RAM_HEAP_POINTER 0x20048000
+/* Use the normal C heap in RAM1/RAM2 for dynamic lwIP allocations. SRAM3 is
+ * reserved exclusively for Ethernet descriptors and zero-copy buffers. */
+#define MEM_LIBC_MALLOC        1
+#define MEMP_NUM_SYS_TIMEOUT   16
 /*----- Value in opt.h for LWIP_ETHERNET: LWIP_ARP || PPPOE_SUPPORT -*/
 #define LWIP_ETHERNET 1
 /*----- Value in opt.h for LWIP_DNS_SECURE: (LWIP_DNS_SECURE_RAND_XID | LWIP_DNS_SECURE_NO_MULTIPLE_OUTSTANDING | LWIP_DNS_SECURE_RAND_SRC_PORT) -*/
@@ -99,6 +102,12 @@
 #define CHECKSUM_CHECK_ICMP6 0
 /*-----------------------------------------------------------------------------*/
 /* USER CODE BEGIN 1 */
+
+#if (DAP_SERVER_MODE == DAP_SERVER_MODE_TLS)
+  #define LWIP_ALTCP                 1
+  #define LWIP_ALTCP_TLS             1
+  #define LWIP_ALTCP_TLS_MBEDTLS     1
+#endif
 
 /* USER CODE END 1 */
 

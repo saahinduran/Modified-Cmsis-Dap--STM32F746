@@ -278,6 +278,13 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
     Txbuffer[i].buffer = q->payload;
     Txbuffer[i].len = q->len;
 
+    /* TX pbufs may come from the normal cacheable C heap. Clean complete
+     * cache lines before Ethernet DMA reads each payload. */
+    uintptr_t cache_start = (uintptr_t)q->payload & ~(uintptr_t)31U;
+    uintptr_t cache_end = ((uintptr_t)q->payload + q->len + 31U) & ~(uintptr_t)31U;
+    SCB_CleanDCache_by_Addr((uint32_t *)cache_start,
+                (int32_t)(cache_end - cache_start));
+
     if(i>0)
     {
       Txbuffer[i-1].next = &Txbuffer[i];
@@ -724,6 +731,13 @@ void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t 
   struct pbuf **ppEnd = (struct pbuf **)pEnd;
   struct pbuf *p = NULL;
 
+  /* Invalidate before updating pbuf metadata. The rounded range can include
+   * the cache line containing the custom pbuf header. */
+  uintptr_t cache_start = (uintptr_t)buff & ~(uintptr_t)31U;
+  uintptr_t cache_end = ((uintptr_t)buff + Length + 31U) & ~(uintptr_t)31U;
+  SCB_InvalidateDCache_by_Addr((uint32_t *)cache_start,
+                               (int32_t)(cache_end - cache_start));
+
   /* Get the struct pbuf from the buff address. */
   p = (struct pbuf *)(buff - offsetof(RxBuff_t, buff));
   p->next = NULL;
@@ -749,9 +763,6 @@ void HAL_ETH_RxLinkCallback(void **pStart, void **pEnd, uint8_t *buff, uint16_t 
   {
     p->tot_len += Length;
   }
-
-  /* Invalidate data cache because Rx DMA's writing to physical memory makes it stale. */
-  SCB_InvalidateDCache_by_Addr((uint32_t *)buff, Length);
 
 /* USER CODE END HAL ETH RxLinkCallback */
 }
