@@ -1,143 +1,90 @@
 # CMSIS-DAP TCP Server for STM32F7
 
-An Ethernet-based **CMSIS-DAP** debug probe firmware for **STM32F746** (e.g., NUCLEO-F746ZG), providing SWD and JTAG debugging over TCP/IP using the lwIP raw API.
+Ethernet-based CMSIS-DAP debug firmware for STM32F746. It exposes a TCP debug endpoint for OpenOCD/pyOCD and can run in local LAN mode or over a remote relay/TLS path.
 
----
+## Branches
 
-## 🌿 Branches & Implementation Differences
+This repository has two main branches:
 
-This repository contains two distinct implementations on separate branches:
+- `gpio`: standard CMSIS-DAP using GPIO bit-banging
+- `spi`: faster SPI-based implementation for custom high-throughput JTAG transport
 
-| Branch | Signal Generation | Protocol Compatibility | Description & Best Use Case |
-| :--- | :--- | :--- | :--- |
-| **`gpio`** | **GPIO Bit-Banging** | **Standard CMSIS-DAP** | Standard CMSIS-DAP v1/v2 compatible out-of-the-box with upstream **OpenOCD**, **pyOCD**, and Keil MDK. Universal pin mapping and straightforward setup. |
-| **`spi`** | **Hardware SPI Accelerated** | **Customized Protocol** | Custom high-speed JTAG protocol leveraging STM32 hardware SPI peripherals (SPI3/SPI4 FIFOs) for accelerated clocking and high data throughput. Requires compatible customized client/fork. |
-
-To switch branches:
 ```bash
-git checkout gpio  # For Standard CMSIS-DAP (GPIO bit-banging)
-git checkout spi   # For High-Speed SPI Accelerated version
+git checkout gpio
+git checkout spi
 ```
 
----
+## Deployment modes
 
-## 🚀 Key Features
-
-- **Networked Debugging**: Direct TCP server implementation using lightweight lwIP raw API with zero-copy packet processing and tuned TCP MSS (1024 bytes).
-- **Dual Deployment Modes** (configured in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h)):
-  - **LAN Mode (`DAP_SERVER_MODE_LAN`)**: Listens as a TCP server on the local network.
-  - **WAN Mode (`DAP_SERVER_MODE_WAN`)**: Automatically initiates an outbound connection to a remote relay/VPS server—enabling remote debugging through NAT and firewalls.
-- **Diagnostics & Profiling**: Real-time connection status, TCP queue diagnostics, and DWT cycle execution profiling output over USART3 (ST-LINK Virtual COM Port at 115200 baud).
-
----
-
-## ⚙️ Configuration
-
-All network and server configurations are centralized in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h):
+The firmware is configured in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h):
 
 ```c
-/* Mode Selection: DAP_SERVER_MODE_LAN or DAP_SERVER_MODE_WAN */
-#define DAP_SERVER_MODE         DAP_SERVER_MODE_LAN
+#define DAP_SERVER_MODE       DAP_SERVER_MODE_TLS
+#define DAP_TCP_SERVER_PORT    5000
+#define DAP_TCP_PKT_SIZE       4096U
 
-/* Server listening port (LAN mode) */
-#define DAP_TCP_SERVER_PORT     5000
-
-/* Packet buffer size */
-#define DAP_TCP_PKT_SIZE        4096U
-
-/* Remote server configuration (WAN mode only) */
-#if (DAP_SERVER_MODE == DAP_SERVER_MODE_WAN)
-#define REMOTE_SERVER_IP        "192.168.1.137"
-#define REMOTE_SERVER_PORT      4441
-#define REMOTE_RECONNECT_MS     10000U
-#endif
+#define REMOTE_SERVER_IP       "192.168.1.55"
+#define REMOTE_SERVER_PORT     4442
+#define REMOTE_RECONNECT_MS    10000U
 ```
 
-### Static IP / Network Settings
+Available modes:
 
-Network IP configuration is defined in `LWIP/App/lwip.c` (and STM32CubeMX `.ioc`):
-- **Default IP (LAN)**: `192.168.1.114`
-- **Netmask**: `255.255.255.0`
-- **Gateway**: `192.168.1.1`
+- `DAP_SERVER_MODE_LAN`: local TCP server only
+- `DAP_SERVER_MODE_WAN`: outbound connection to a remote relay/VPS
+- `DAP_SERVER_MODE_TLS`: LAN server + secure outbound TLS link
 
----
+## Forwarding architecture
 
-## 📌 Pinout & Hardware Connections
+The remote path is a relay-based tunnel, not a JTAG parser in the relay:
 
-### Target Debug Interface
-
-| Signal | Function | GPIO (`gpio` branch) | SPI (`spi` branch) |
-| :--- | :--- | :--- | :--- |
-| **TCK / SWCLK** | Clock | `GPIOC Pin 10` | `SPI4_SCK (PE2)` / `PC10` |
-| **TMS / SWDIO** | Mode Select / Data I/O | `GPIOC Pin 11` | `SPI4_MOSI (PE6)` / `PC11` |
-| **TDI** | JTAG Data In | `GPIOC Pin 12` | `SPI3_MOSI (PC12)` |
-| **TDO** | JTAG Data Out | `GPIOC Pin 2` | `SPI3_MISO (PC11)` / `PC2` |
-| **nTRST** *(Optional)* | JTAG Test Reset | `GPIOC Pin 8` | `GPIOC Pin 8` |
-| **nRESET / SRST** *(Optional)* | Target System Reset | `GPIOD Pin 2` | `GPIOD Pin 2` |
-| **GND** | Ground | `GND` | `GND` |
-
-### Serial Debug Output (Virtual COM Port)
-
-- **USART3 TX**: `PD8` (Connected to ST-LINK Virtual COM Port)
-- **USART3 RX**: `PD9`
-- **Baud Rate**: `115200 8-N-1`
-
----
-
-## 🛠️ Usage with OpenOCD (Standard `gpio` branch)
-
-Create an `openocd_tcp.cfg` configuration file on your host machine:
-
-```tcl
-# Interface configuration for CMSIS-DAP over TCP
-adapter driver cmsis-dap
-cmsis-dap backend tcp
-cmsis-dap tcp_server 192.168.1.114
-cmsis-dap tcp_port 5000
-
-# Select transport protocol (swd or jtag)
-transport select swd
-
-# Target configuration (example for STM32F4)
-source [find target/stm32f4x.cfg]
+```text
+OpenOCD / openFPGALoader
+        |
+        | plain TCP
+        v
+Windows host proxy (or any relay host)
+        |
+        | TLS-encrypted TCP stream
+        v
+Relay server (can be local or on a remote VPS)
+        |
+        | same encrypted stream, forwarded byte-for-byte
+        v
+STM32F746 gateway
+        |
+        | decrypt + parse CMSIS-DAP payload
+        v
+JTAG target
 ```
 
-Run OpenOCD:
-```bash
-openocd -f openocd_tcp.cfg
-```
+The relay only forwards TCP bytes. It does not terminate TLS and does not inspect CMSIS-DAP packets. The STM32 gateway decrypts the stream, validates the DAP packet framing, executes the command, and sends the encrypted response back.
 
-Connect with GDB:
-```bash
-arm-none-eabi-gdb your_firmware.elf
-(gdb) target extended-remote :3333
-(gdb) monitor reset halt
-(gdb) load
-(gdb) continue
-```
+This works whether the relay is running on a Windows machine or on a remote VPS.
 
----
+## Configuration example
 
-## 🔨 Building and Flashing
+For a remote TLS setup:
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/saahinduran/CMSIS-DAP-TCP.git
-   cd CMSIS-DAP-TCP
-   git checkout gpio  # or: git checkout spi
-   ```
-2. **Open in STM32CubeIDE**:
-   - File -> Open Projects from File System... -> Select repository directory.
-3. **Build**:
-   - Select **Release** or **Debug** configuration (recommended `-O3` optimization level for highest transfer performance).
-4. **Flash**:
-   - Connect the STM32F746 board via the onboard ST-LINK USB port and flash the target.
-5. **Network Connection**:
-   - Connect an RJ45 Ethernet cable to your local network switch/router.
-   - Monitor the USART3 serial console (115200 baud) for IP status and connection logs.
+- local tool connects to the host proxy on `127.0.0.1:6666` (or another configured port)
+- the proxy connects to the relay host on a public/private relay port
+- the STM32 connects outbound to the relay on `REMOTE_SERVER_PORT`
+- both sides use the same relay socket pair, with the relay forwarding bytes transparently
 
----
+## Usage
 
-## 📄 License
+1. Open the project in STM32CubeIDE.
+2. Select the desired branch (`gpio` or `spi`).
+3. Set the mode and remote address in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h).
+4. Build and flash the STM32 board.
+5. Start the host proxy/relay and connect OpenOCD or pyOCD to the configured TCP port.
 
-This project is licensed under the [Apache-2.0 License](LICENSE) with upstream components licensed under standard BSD / MIT licenses (lwIP and STM32 HAL).
+## Notes
+
+- `gpio` branch: standard CMSIS-DAP compatible with upstream OpenOCD and pyOCD
+- `spi` branch: optimized custom transport for higher JTAG throughput
+- Network IP and Ethernet settings are defined in the lwIP configuration and STM32CubeMX project files
+
+## License
+
+This project is licensed under the [Apache-2.0 License](LICENSE).
