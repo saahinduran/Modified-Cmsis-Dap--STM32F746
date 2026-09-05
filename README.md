@@ -24,10 +24,12 @@ git checkout spi   # For High-Speed SPI Accelerated version
 ## 🚀 Key Features
 
 - **Networked Debugging**: Direct TCP server implementation using lightweight lwIP raw API with zero-copy packet processing and tuned TCP MSS (1024 bytes).
-- **Dual Deployment Modes** (configured in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h)):
-  - **LAN Mode (`DAP_SERVER_MODE_LAN`)**: Listens as a TCP server on the local network.
-  - **WAN Mode (`DAP_SERVER_MODE_WAN`)**: Automatically initiates an outbound connection to a remote relay/VPS server—enabling remote debugging through NAT and firewalls.
-- **Diagnostics & Profiling**: Real-time connection status, TCP queue diagnostics, and DWT cycle execution profiling output over USART3 (ST-LINK Virtual COM Port at 115200 baud).
+- **Deployment Modes** (configured in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h)):
+  - **LAN Mode (`DAP_SERVER_MODE_LAN`)**: local TCP endpoint on the network.
+  - **WAN Mode (`DAP_SERVER_MODE_WAN`)**: outbound connection to a remote relay/VPS.
+  - **TLS Mode (`DAP_SERVER_MODE_TLS`)**: local LAN server plus encrypted relay connection.
+- **Remote Relay Support**: works with a Windows relay or a relay hosted on a remote VPS.
+- **Diagnostics & Profiling**: real-time connection status, TCP queue diagnostics, and DWT cycle execution profiling over USART3.
 
 ---
 
@@ -36,8 +38,8 @@ git checkout spi   # For High-Speed SPI Accelerated version
 All network and server configurations are centralized in [`Core/Inc/dap_server_config.h`](Core/Inc/dap_server_config.h):
 
 ```c
-/* Mode Selection: DAP_SERVER_MODE_LAN or DAP_SERVER_MODE_WAN */
-#define DAP_SERVER_MODE         DAP_SERVER_MODE_LAN
+/* Mode Selection: DAP_SERVER_MODE_LAN, DAP_SERVER_MODE_WAN or DAP_SERVER_MODE_TLS */
+#define DAP_SERVER_MODE         DAP_SERVER_MODE_TLS
 
 /* Server listening port (LAN mode) */
 #define DAP_TCP_SERVER_PORT     5000
@@ -45,13 +47,25 @@ All network and server configurations are centralized in [`Core/Inc/dap_server_c
 /* Packet buffer size */
 #define DAP_TCP_PKT_SIZE        4096U
 
-/* Remote server configuration (WAN mode only) */
-#if (DAP_SERVER_MODE == DAP_SERVER_MODE_WAN)
+/* Remote server configuration (WAN/TLS mode only) */
+#if (DAP_SERVER_MODE == DAP_SERVER_MODE_WAN) || (DAP_SERVER_MODE == DAP_SERVER_MODE_TLS)
 #define REMOTE_SERVER_IP        "192.168.1.137"
 #define REMOTE_SERVER_PORT      4441
 #define REMOTE_RECONNECT_MS     10000U
 #endif
 ```
+
+## 🔐 Remote TLS / Relay Path
+
+The remote path uses a relay between the host tool and the STM32 gateway:
+
+```text
+OpenOCD / pyOCD / openFPGALoader -> Host proxy -> Relay/VPS -> STM32 gateway -> JTAG target
+```
+
+The relay forwards TCP bytes without terminating TLS or parsing CMSIS-DAP packets. The STM32 gateway decrypts the stream, validates the DAP frame, executes the command, and sends the encrypted response back. The same design works with a Windows relay or a relay running on a remote VPS.
+
+---
 
 ### Static IP / Network Settings
 
